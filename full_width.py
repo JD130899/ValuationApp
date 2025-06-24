@@ -12,7 +12,16 @@ from langchain.prompts import PromptTemplate
 from pdf2image import convert_from_path
 
 # --- Constants ---
-PDF_PATH = "/Users/jaipdalvi/Desktop/Work/Value Buddy, Inc./Code/Galligan Holdings Certified Valuation Report.pdf"
+import tempfile
+
+uploaded_pdf = st.file_uploader("Upload a Valuation PDF", type=["pdf"])
+if uploaded_pdf is not None:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        tmp_file.write(uploaded_pdf.read())
+        PDF_PATH = tmp_file.name
+else:
+    st.stop()  # wait for user to upload before continuing
+
 
 # --- Page Config ---
 st.set_page_config(page_title="ChatBot", layout="wide")
