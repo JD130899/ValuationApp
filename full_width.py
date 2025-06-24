@@ -62,21 +62,26 @@ st.markdown("""
 st.title("Underwriting Agent")
 
 # --- Show Intro Messages Early ---
+# --- Show Intro + Message History ---
 for msg in st.session_state.messages:
     role_class = "user-bubble" if msg["role"] == "user" else "assistant-bubble"
-    st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
+    
+    if msg["role"] == "assistant":
+        # Re-render tables or markdown content
+        from markdown import markdown as md_to_html
+        import re
 
-user_input = st.chat_input("Message...")
-prompt = user_input
+        content = msg["content"]
+        if content.strip().startswith("```"):
+            content = re.sub(r"^```(?:\w+)?\\n?", "", content.strip())
+            content = re.sub(r"```$", "", content.strip())
+        content_html = md_to_html(content, extensions=["extra", "tables"])
+        wrapped = f"<div class='{role_class} clearfix'>{content_html}</div>"
+        st.markdown(wrapped, unsafe_allow_html=True)
+    else:
+        # Just display user message as-is
+        st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
 
-# --- Clean & Convert Response ---
-def render_assistant_output(answer: str):
-    if answer.strip().startswith("```"):
-        answer = re.sub(r"^```(?:\w+)?\n?", "", answer.strip())
-        answer = re.sub(r"```$", "", answer.strip())
-    html_answer = md_to_html(answer, extensions=["extra", "tables"])
-    bubble = f"<div class='assistant-bubble clearfix'>{html_answer}</div>"
-    st.markdown(bubble, unsafe_allow_html=True)
 
 # --- PDF Parsing ---
 def parse_pdf():
