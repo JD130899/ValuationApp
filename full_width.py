@@ -11,6 +11,13 @@ from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from pdf2image import convert_from_path
 
+# --- Session State Setup ---
+if "initialized" not in st.session_state:
+    st.session_state.initialized = False
+    st.session_state.messages = []
+    st.session_state.messages.append({"role": "assistant", "content": "Hi! I am here to answer any questions you may have about your valuation report."})
+    st.session_state.messages.append({"role": "assistant", "content": "What can I help you with?"})
+
 # --- File Upload ---
 uploaded_pdf = st.file_uploader("Upload a Valuation PDF", type=["pdf"])
 if uploaded_pdf is not None:
@@ -19,6 +26,7 @@ if uploaded_pdf is not None:
         PDF_PATH = tmp_file.name
 else:
     st.stop()
+
 
 # --- Page Config ---
 st.set_page_config(page_title="ChatBot", layout="wide")
@@ -52,18 +60,13 @@ st.markdown("""
 # --- Title ---
 st.title("Underwriting Agent")
 
-# --- Session State Setup ---
-if "initialized" not in st.session_state:
-    st.session_state.initialized = False
-    st.session_state.messages = []
-    st.session_state.messages.append({"role": "assistant", "content": "Hi! I am here to answer any questions you may have about your valuation report."})
-    st.session_state.messages.append({"role": "assistant", "content": "What can I help you with?"})
+
 
 # --- Button Trigger ---
 #valuation_clicked = st.empty()
 #valuation_triggered = valuation_clicked.button("Valuation 💰", key="valuation_btn", help="Click to ask about valuation")
-#user_input = st.chat_input("Message...")
-#prompt = "What is the valuation?" if valuation_triggered else user_input
+user_input = st.chat_input("Message...")
+prompt = user_input
 
 # --- PDF Parsing ---
 def parse_pdf():
