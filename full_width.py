@@ -164,10 +164,10 @@ if prompt:
         st.session_state.messages.append({"role": "assistant", "content": answer})
 
         # Use direct markdown if table detected
-        if "|" in answer and "---" in answer:
-            st.markdown(answer)  # this ensures proper table rendering
-        else:
-            typewriter_output(answer)
+        # Always wrap in bubble, including tables
+        formatted_answer = f"<div class='assistant-bubble clearfix'>{answer}</div>"
+        st.markdown(formatted_answer, unsafe_allow_html=True)
+
 
         # Optional Source
         if doc:
