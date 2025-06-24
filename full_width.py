@@ -111,7 +111,13 @@ Context:
 Question:
 {question}
 """)
-    qa_full = RetrievalQA.from_chain_type(llm=llm, retriever=full_ret, return_source_documents=True)
+    qa_full = RetrievalQA.from_chain_type(
+    llm=llm,
+    retriever=full_ret,
+    return_source_documents=True,
+    chain_type_kwargs={"prompt": custom_prompt}
+)
+
     qa_table = RetrievalQA.from_chain_type(llm=llm, retriever=table_ret, return_source_documents=True, chain_type_kwargs={"prompt": custom_prompt})
     return qa_full, qa_table
 
