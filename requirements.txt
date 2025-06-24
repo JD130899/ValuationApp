@@ -7,3 +7,4 @@ pdf2image
 Pillow
 tqdm
 llama_cloud_services
+faiss-cpu
