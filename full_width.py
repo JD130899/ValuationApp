@@ -10,6 +10,8 @@ from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from pdf2image import convert_from_path
+from markdown import markdown as md_to_html
+import html
 
 # --- Session State Setup ---
 if "initialized" not in st.session_state:
