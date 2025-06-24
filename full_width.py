@@ -110,7 +110,10 @@ def get_vectorstores(docs):
 def get_qa_chains(full_ret, table_ret):
     llm = ChatOpenAI(temperature=0, openai_api_key=st.secrets["OPENAI_API_KEY"])
     custom_prompt = PromptTemplate.from_template("""
-You are a helpful financial assistant. Based on the context below, extract markdown tables exactly as is without any modifications or reformatting. Do not summarize. Only include the table using proper markdown format.
+You are a helpful financial assistant. Based on the context below, return relevant information as clearly as possible.
+- If a table is found, return the table using proper markdown format.
+- If not, reply with plain text.
+Do not wrap content in code blocks.
 
 Context:
 {context}
@@ -118,6 +121,7 @@ Context:
 Question:
 {question}
 """)
+
     qa_full = RetrievalQA.from_chain_type(
         llm=llm,
         retriever=full_ret,
