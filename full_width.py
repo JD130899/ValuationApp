@@ -60,10 +60,10 @@ if "initialized" not in st.session_state:
     st.session_state.messages.append({"role": "assistant", "content": "What can I help you with?"})
 
 # --- Button Trigger ---
-valuation_clicked = st.empty()
-valuation_triggered = valuation_clicked.button("Valuation 💰", key="valuation_btn", help="Click to ask about valuation")
-user_input = st.chat_input("Message...")
-prompt = "What is the valuation?" if valuation_triggered else user_input
+#valuation_clicked = st.empty()
+#valuation_triggered = valuation_clicked.button("Valuation 💰", key="valuation_btn", help="Click to ask about valuation")
+#user_input = st.chat_input("Message...")
+#prompt = "What is the valuation?" if valuation_triggered else user_input
 
 # --- PDF Parsing ---
 def parse_pdf():
@@ -170,10 +170,10 @@ if prompt:
 
 
 # --- Floating Valuation Button ---
-st.markdown("""
-    <div class="floating-button">
-        <form action="" method="post">
-            <button onclick="window.location.reload();">Valuation 💰</button>
-        </form>
-    </div>
-""", unsafe_allow_html=True)
+#st.markdown("""
+#   <div class="floating-button">
+#      <form action="" method="post">
+#            <button onclick="window.location.reload();">Valuation 💰</button>
+#        </form>
+#    </div>
+#""", unsafe_allow_html=True)
