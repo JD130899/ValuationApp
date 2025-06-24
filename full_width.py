@@ -165,10 +165,9 @@ if prompt:
             page = doc.metadata.get("page_number", "Unknown")
             with st.popover("📘 Source Info"):
                 st.markdown(f"Page: {page}")
-                with tempfile.TemporaryDirectory() as tmp:
-                    images = convert_from_path(PDF_PATH, dpi=150, first_page=page, last_page=page, output_folder=tmp)
-                    if images:
-                        st.image(images[0], caption=f"Page {page}", use_container_width=True)
+                st.markdown("**Extracted Text:**")
+                st.markdown(doc.page_content)
+
 
 # --- Floating Valuation Button ---
 st.markdown("""
