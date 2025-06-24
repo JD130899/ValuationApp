@@ -149,6 +149,10 @@ def typewriter_output(answer):
         time.sleep(0.008)
 
 # --- Chat Handling ---
+from markdown import markdown as md_to_html
+import html
+
+# --- Chat Handling ---
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.markdown(f"<div class='user-bubble clearfix'>{prompt}</div>", unsafe_allow_html=True)
@@ -163,19 +167,25 @@ if prompt:
 
         st.session_state.messages.append({"role": "assistant", "content": answer})
 
-        # Use direct markdown if table detected
-        # Always wrap in bubble, including tables
-        formatted_answer = f"<div class='assistant-bubble clearfix'>{answer}</div>"
-        st.markdown(formatted_answer, unsafe_allow_html=True)
+        # 1. Strip triple backticks
+        if answer.strip().startswith("```") and answer.strip().endswith("```"):
+            answer = answer.strip().strip("`").replace("markdown", "").strip()
 
+        # 2. Convert markdown (with tables) to HTML
+        html_answer = md_to_html(answer, extensions=['tables', 'extra'])
 
-        # Optional Source
+        # 3. Wrap in styled assistant bubble
+        wrapped = f"<div class='assistant-bubble clearfix'>{html_answer}</div>"
+        st.markdown(wrapped, unsafe_allow_html=True)
+
+        # Optional: Source info
         if doc:
             page = doc.metadata.get("page_number", "Unknown")
             with st.popover("📘 Source Info"):
                 st.markdown(f"Page: {page}")
                 st.markdown("*Extracted Text:*")
                 st.markdown(doc.page_content)
+
 
 
 # --- Floating Valuation Button ---
