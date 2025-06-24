@@ -73,6 +73,24 @@ for msg in st.session_state.messages:
 user_input = st.chat_input("Message...")
 prompt = user_input
 
+from markdown import markdown as md_to_html
+import re
+
+# --- Clean & Convert Response ---
+def render_assistant_output(answer: str):
+    # Step 1: Remove ```markdown or ``` from start and end
+    if answer.strip().startswith("```"):
+        answer = re.sub(r"^```(?:\w+)?\n?", "", answer.strip())
+        answer = re.sub(r"```$", "", answer.strip())
+
+    # Step 2: Convert markdown to HTML
+    html_answer = md_to_html(answer, extensions=["extra", "tables"])
+
+    # Step 3: Wrap in assistant bubble div
+    bubble = f"<div class='assistant-bubble clearfix'>{html_answer}</div>"
+    st.markdown(bubble, unsafe_allow_html=True)
+
+
 # --- PDF Parsing ---
 def parse_pdf():
     parser = LlamaParse(
@@ -155,6 +173,7 @@ from markdown import markdown as md_to_html
 import html
 
 # --- Chat Handling ---
+# --- Chat Handling ---
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.markdown(f"<div class='user-bubble clearfix'>{prompt}</div>", unsafe_allow_html=True)
@@ -169,24 +188,17 @@ if prompt:
 
         st.session_state.messages.append({"role": "assistant", "content": answer})
 
-        # 1. Strip triple backticks
-        if answer.strip().startswith("```") and answer.strip().endswith("```"):
-            answer = answer.strip().strip("`").replace("markdown", "").strip()
+        # ✅ Consistent rendering inside assistant bubble (markdown tables or plain text)
+        render_assistant_output(answer)
 
-        # 2. Convert markdown (with tables) to HTML
-        html_answer = md_to_html(answer, extensions=['tables', 'extra'])
-
-        # 3. Wrap in styled assistant bubble
-        wrapped = f"<div class='assistant-bubble clearfix'>{html_answer}</div>"
-        st.markdown(wrapped, unsafe_allow_html=True)
-
-        # Optional: Source info
+        # Optional: Show page number source
         if doc:
             page = doc.metadata.get("page_number", "Unknown")
             with st.popover("📘 Source Info"):
                 st.markdown(f"Page: {page}")
                 st.markdown("*Extracted Text:*")
                 st.markdown(doc.page_content)
+
 
 
 
