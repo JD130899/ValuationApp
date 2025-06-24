@@ -1,0 +1,8 @@
+streamlit
+openai
+langchain
+langchain-community
+pypdf
+pdf2image
+Pillow
+tqdm
