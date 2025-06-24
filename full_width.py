@@ -11,6 +11,15 @@ from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from pdf2image import convert_from_path
 
+# --- File Upload ---
+uploaded_pdf = st.file_uploader("Upload a Valuation PDF", type=["pdf"])
+if uploaded_pdf is not None:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        tmp_file.write(uploaded_pdf.read())
+        PDF_PATH = tmp_file.name
+else:
+    st.stop()
+
 # --- Page Config ---
 st.set_page_config(page_title="ChatBot", layout="wide")
 
@@ -30,46 +39,33 @@ st.markdown("""
         }
         .clearfix::after { content: ""; display: block; clear: both; }
         .floating-button {
-            position: fixed; bottom: 80px; right: 20px; z-index: 9999;
+            position: fixed; bottom: 20px; right: 20px; z-index: 9999;
         }
         .floating-button button {
             background-color: #444 !important;
             color: white !important; padding: 10px 18px;
             border-radius: 999px; border: none;
         }
-        .small-text {
-            font-size: 12px;
-        }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Title + Greeting ---
+# --- Title ---
 st.title("Underwriting Agent")
 
+# --- Session State Setup ---
 if "initialized" not in st.session_state:
     st.session_state.initialized = False
     st.session_state.messages = []
     st.session_state.messages.append({"role": "assistant", "content": "Hi! I am here to answer any questions you may have about your valuation report."})
     st.session_state.messages.append({"role": "assistant", "content": "What can I help you with?"})
 
-# --- Show Messages at Top ---
-for msg in st.session_state.messages:
-    role_class = "user-bubble" if msg["role"] == "user" else "assistant-bubble"
-    st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
-
-# --- File Upload ---
-uploaded_pdf = st.file_uploader("Upload a Valuation PDF", type=["pdf"])
-if uploaded_pdf is not None and "PDF_PATH" not in st.session_state:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        tmp_file.write(uploaded_pdf.read())
-        st.session_state.PDF_PATH = tmp_file.name
-
-# --- Valuation Button + Chat Prompt (always visible) ---
-valuation_triggered = st.button("Valuation 💰 (ask valuation)", key="valuation_btn")
+# --- Button Trigger ---
+valuation_clicked = st.empty()
+valuation_triggered = valuation_clicked.button("Valuation 💰", key="valuation_btn", help="Click to ask about valuation")
 user_input = st.chat_input("Message...")
 prompt = "What is the valuation?" if valuation_triggered else user_input
 
-# --- PDF Parsing Logic ---
+# --- PDF Parsing ---
 def parse_pdf():
     parser = LlamaParse(
         api_key=st.secrets["LLAMA_CLOUD_API_KEY"],
@@ -77,7 +73,7 @@ def parse_pdf():
         verbose=False,
         language="en"
     )
-    result = parser.parse(st.session_state.PDF_PATH)
+    result = parser.parse(PDF_PATH)
     lc_documents = []
     for page in result.pages:
         if page.md.strip():
@@ -89,6 +85,7 @@ def parse_pdf():
             lc_documents.append(Document(page_content=content, metadata=metadata))
     return lc_documents
 
+# --- Embeddings + Vectorstores ---
 def get_vectorstores(docs):
     embed = OpenAIEmbeddings(openai_api_key=st.secrets["OPENAI_API_KEY"])
     table_docs = [doc for doc in docs if doc.metadata.get("type") == "table"]
@@ -96,6 +93,7 @@ def get_vectorstores(docs):
     table_vs = FAISS.from_documents(table_docs, embed)
     return full_vs.as_retriever(), table_vs.as_retriever()
 
+# --- QA Chains ---
 def get_qa_chains(full_ret, table_ret):
     llm = ChatOpenAI(temperature=0, openai_api_key=st.secrets["OPENAI_API_KEY"])
     custom_prompt = PromptTemplate.from_template("""
@@ -111,8 +109,8 @@ Question:
     qa_table = RetrievalQA.from_chain_type(llm=llm, retriever=table_ret, return_source_documents=True, chain_type_kwargs={"prompt": custom_prompt})
     return qa_full, qa_table
 
-# --- Run Backend on First Time PDF Upload ---
-if uploaded_pdf and not st.session_state.initialized:
+# --- First-Time Setup ---
+if not st.session_state.initialized:
     with st.spinner("Parsing PDF..."):
         docs = parse_pdf()
     with st.spinner("Building vectorstore..."):
@@ -127,6 +125,11 @@ if uploaded_pdf and not st.session_state.initialized:
     st.session_state.qa_chain_table = qa_table
     st.session_state.initialized = True
 
+# --- Show Message History ---
+for msg in st.session_state.messages:
+    role_class = "user-bubble" if msg["role"] == "user" else "assistant-bubble"
+    st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
+
 # --- Typing Effect ---
 def typewriter_output(answer):
     container = st.empty()
@@ -137,7 +140,7 @@ def typewriter_output(answer):
         time.sleep(0.008)
 
 # --- Chat Handling ---
-if prompt and st.session_state.initialized:
+if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.markdown(f"<div class='user-bubble clearfix'>{prompt}</div>", unsafe_allow_html=True)
 
@@ -151,21 +154,22 @@ if prompt and st.session_state.initialized:
 
         st.session_state.messages.append({"role": "assistant", "content": answer})
 
-        # Show markdown table directly or type out normal response
+        # Use direct markdown if table detected
         if "|" in answer and "---" in answer:
-            st.markdown(answer)
+            st.markdown(answer)  # this ensures proper table rendering
         else:
             typewriter_output(answer)
 
-        # 📘 Show Source Info
+        # Optional Source
         if doc:
             page = doc.metadata.get("page_number", "Unknown")
             with st.popover("📘 Source Info"):
-                st.markdown(f"<span class='small-text'>Page: {page}</span>", unsafe_allow_html=True)
-                st.markdown("<span class='small-text'>**Extracted Text:**</span>", unsafe_allow_html=True)
-                st.markdown(f"<span class='small-text'>{doc.page_content}</span>", unsafe_allow_html=True)
+                st.markdown(f"Page: {page}")
+                st.markdown("*Extracted Text:*")
+                st.markdown(doc.page_content)
 
-# --- Always-visible Floating Button (reload to trigger valuation) ---
+
+# --- Floating Valuation Button ---
 st.markdown("""
     <div class="floating-button">
         <form action="" method="post">
