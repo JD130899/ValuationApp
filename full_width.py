@@ -11,17 +11,14 @@ from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from pdf2image import convert_from_path
 
-# --- Constants ---
-import tempfile
-
+# --- File Upload ---
 uploaded_pdf = st.file_uploader("Upload a Valuation PDF", type=["pdf"])
 if uploaded_pdf is not None:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(uploaded_pdf.read())
         PDF_PATH = tmp_file.name
 else:
-    st.stop()  # wait for user to upload before continuing
-
+    st.stop()
 
 # --- Page Config ---
 st.set_page_config(page_title="ChatBot", layout="wide")
@@ -29,47 +26,25 @@ st.set_page_config(page_title="ChatBot", layout="wide")
 # --- CSS Styling ---
 st.markdown("""
     <style>
-        .stApp {
-            background-color: black;
-            color: white;
-        }
+        .stApp { background-color: black; color: white; }
         .user-bubble {
-            background-color: #2a2a2a;
-            color: white;
-            padding: 10px;
-            border-radius: 12px;
-            max-width: 60%;
-            float: right;
-            margin: 5px 0 10px auto;
-            text-align: right;
+            background-color: #2a2a2a; color: white;
+            padding: 10px; border-radius: 12px; max-width: 60%;
+            float: right; margin: 5px 0 10px auto; text-align: right;
         }
         .assistant-bubble {
-            background-color: #1e1e1e;
-            color: white;
-            padding: 10px;
-            border-radius: 12px;
-            max-width: 60%;
-            float: left;
-            margin: 5px auto 10px 0;
-            text-align: left;
+            background-color: #1e1e1e; color: white;
+            padding: 10px; border-radius: 12px; max-width: 60%;
+            float: left; margin: 5px auto 10px 0; text-align: left;
         }
-        .clearfix::after {
-            content: "";
-            display: block;
-            clear: both;
-        }
+        .clearfix::after { content: ""; display: block; clear: both; }
         .floating-button {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 9999;
+            position: fixed; bottom: 20px; right: 20px; z-index: 9999;
         }
         .floating-button button {
             background-color: #444 !important;
-            color: white !important;
-            padding: 10px 18px;
-            border-radius: 999px;
-            border: none;
+            color: white !important; padding: 10px 18px;
+            border-radius: 999px; border: none;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -77,22 +52,20 @@ st.markdown("""
 # --- Title ---
 st.title("Underwriting Agent")
 
-# --- Session state setup ---
+# --- Session State Setup ---
 if "initialized" not in st.session_state:
     st.session_state.initialized = False
     st.session_state.messages = []
     st.session_state.messages.append({"role": "assistant", "content": "Hi! I am here to answer any questions you may have about your valuation report."})
     st.session_state.messages.append({"role": "assistant", "content": "What can I help you with?"})
 
-# --- Valuation button using JS hack ---
+# --- Button Trigger ---
 valuation_clicked = st.empty()
 valuation_triggered = valuation_clicked.button("Valuation 💰", key="valuation_btn", help="Click to ask about valuation")
-
-# --- Chat input ---
 user_input = st.chat_input("Message...")
 prompt = "What is the valuation?" if valuation_triggered else user_input
 
-# --- Parse PDF once ---
+# --- PDF Parsing ---
 def parse_pdf():
     parser = LlamaParse(
         api_key=st.secrets["LLAMA_CLOUD_API_KEY"],
@@ -112,6 +85,7 @@ def parse_pdf():
             lc_documents.append(Document(page_content=content, metadata=metadata))
     return lc_documents
 
+# --- Embeddings + Vectorstores ---
 def get_vectorstores(docs):
     embed = OpenAIEmbeddings(openai_api_key=st.secrets["OPENAI_API_KEY"])
     table_docs = [doc for doc in docs if doc.metadata.get("type") == "table"]
@@ -119,6 +93,7 @@ def get_vectorstores(docs):
     table_vs = FAISS.from_documents(table_docs, embed)
     return full_vs.as_retriever(), table_vs.as_retriever()
 
+# --- QA Chains ---
 def get_qa_chains(full_ret, table_ret):
     llm = ChatOpenAI(temperature=0, openai_api_key=st.secrets["OPENAI_API_KEY"])
     custom_prompt = PromptTemplate.from_template("""
@@ -134,7 +109,7 @@ Question:
     qa_table = RetrievalQA.from_chain_type(llm=llm, retriever=table_ret, return_source_documents=True, chain_type_kwargs={"prompt": custom_prompt})
     return qa_full, qa_table
 
-# --- Setup on first run ---
+# --- First-Time Setup ---
 if not st.session_state.initialized:
     with st.spinner("Parsing PDF..."):
         docs = parse_pdf()
@@ -150,12 +125,12 @@ if not st.session_state.initialized:
     st.session_state.qa_chain_table = qa_table
     st.session_state.initialized = True
 
-# --- Show message history ---
+# --- Show Message History ---
 for msg in st.session_state.messages:
     role_class = "user-bubble" if msg["role"] == "user" else "assistant-bubble"
     st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
 
-# --- Typing animation ---
+# --- Typing Effect ---
 def typewriter_output(answer):
     container = st.empty()
     typed = ""
@@ -164,7 +139,7 @@ def typewriter_output(answer):
         container.markdown(f"<div class='assistant-bubble clearfix'>{typed}</div>", unsafe_allow_html=True)
         time.sleep(0.008)
 
-# --- Handle user prompt ---
+# --- Chat Handling ---
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.markdown(f"<div class='user-bubble clearfix'>{prompt}</div>", unsafe_allow_html=True)
@@ -178,8 +153,14 @@ if prompt:
         doc = result["source_documents"][0] if result["source_documents"] else None
 
         st.session_state.messages.append({"role": "assistant", "content": answer})
-        typewriter_output(answer)
 
+        # Use direct markdown if table detected
+        if "|" in answer and "---" in answer:
+            st.markdown(answer)  # this ensures proper table rendering
+        else:
+            typewriter_output(answer)
+
+        # Optional Source
         if doc:
             page = doc.metadata.get("page_number", "Unknown")
             with st.popover("📘 Source Info"):
