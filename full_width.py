@@ -61,7 +61,10 @@ st.markdown("""
 st.title("Underwriting Agent")
 
 
-
+# --- Show Intro Messages Early ---
+for msg in st.session_state.messages:
+    role_class = "user-bubble" if msg["role"] == "user" else "assistant-bubble"
+    st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
 # --- Button Trigger ---
 #valuation_clicked = st.empty()
 #valuation_triggered = valuation_clicked.button("Valuation 💰", key="valuation_btn", help="Click to ask about valuation")
@@ -128,10 +131,7 @@ if not st.session_state.initialized:
     st.session_state.qa_chain_table = qa_table
     st.session_state.initialized = True
 
-# --- Show Message History ---
-for msg in st.session_state.messages:
-    role_class = "user-bubble" if msg["role"] == "user" else "assistant-bubble"
-    st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
+
 
 # --- Typing Effect ---
 def typewriter_output(answer):
