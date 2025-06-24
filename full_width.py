@@ -1,6 +1,7 @@
 import streamlit as st
 import tempfile
 import time
+import re
 from openai import OpenAI
 from llama_cloud_services import LlamaParse
 from langchain_core.documents import Document
@@ -11,7 +12,6 @@ from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from pdf2image import convert_from_path
 from markdown import markdown as md_to_html
-import html
 
 # --- Session State Setup ---
 if "initialized" not in st.session_state:
@@ -28,7 +28,6 @@ if uploaded_pdf is not None:
         PDF_PATH = tmp_file.name
 else:
     st.stop()
-
 
 # --- Page Config ---
 st.set_page_config(page_title="ChatBot", layout="wide")
@@ -62,34 +61,22 @@ st.markdown("""
 # --- Title ---
 st.title("Underwriting Agent")
 
-
 # --- Show Intro Messages Early ---
 for msg in st.session_state.messages:
     role_class = "user-bubble" if msg["role"] == "user" else "assistant-bubble"
     st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
-# --- Button Trigger ---
-#valuation_clicked = st.empty()
-#valuation_triggered = valuation_clicked.button("Valuation 💰", key="valuation_btn", help="Click to ask about valuation")
+
 user_input = st.chat_input("Message...")
 prompt = user_input
 
-from markdown import markdown as md_to_html
-import re
-
 # --- Clean & Convert Response ---
 def render_assistant_output(answer: str):
-    # Step 1: Remove ```markdown or ``` from start and end
     if answer.strip().startswith("```"):
         answer = re.sub(r"^```(?:\w+)?\n?", "", answer.strip())
         answer = re.sub(r"```$", "", answer.strip())
-
-    # Step 2: Convert markdown to HTML
     html_answer = md_to_html(answer, extensions=["extra", "tables"])
-
-    # Step 3: Wrap in assistant bubble div
     bubble = f"<div class='assistant-bubble clearfix'>{html_answer}</div>"
     st.markdown(bubble, unsafe_allow_html=True)
-
 
 # --- PDF Parsing ---
 def parse_pdf():
@@ -132,13 +119,17 @@ Question:
 {question}
 """)
     qa_full = RetrievalQA.from_chain_type(
-    llm=llm,
-    retriever=full_ret,
-    return_source_documents=True,
-    chain_type_kwargs={"prompt": custom_prompt}
-)
-
-    qa_table = RetrievalQA.from_chain_type(llm=llm, retriever=table_ret, return_source_documents=True, chain_type_kwargs={"prompt": custom_prompt})
+        llm=llm,
+        retriever=full_ret,
+        return_source_documents=True,
+        chain_type_kwargs={"prompt": custom_prompt}
+    )
+    qa_table = RetrievalQA.from_chain_type(
+        llm=llm,
+        retriever=table_ret,
+        return_source_documents=True,
+        chain_type_kwargs={"prompt": custom_prompt}
+    )
     return qa_full, qa_table
 
 # --- First-Time Setup ---
@@ -157,22 +148,6 @@ if not st.session_state.initialized:
     st.session_state.qa_chain_table = qa_table
     st.session_state.initialized = True
 
-
-
-# --- Typing Effect ---
-def typewriter_output(answer):
-    container = st.empty()
-    typed = ""
-    for char in answer:
-        typed += char
-        container.markdown(f"<div class='assistant-bubble clearfix'>{typed}</div>", unsafe_allow_html=True)
-        time.sleep(0.008)
-
-# --- Chat Handling ---
-from markdown import markdown as md_to_html
-import html
-
-# --- Chat Handling ---
 # --- Chat Handling ---
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -187,26 +162,11 @@ if prompt:
         doc = result["source_documents"][0] if result["source_documents"] else None
 
         st.session_state.messages.append({"role": "assistant", "content": answer})
-
-        # ✅ Consistent rendering inside assistant bubble (markdown tables or plain text)
         render_assistant_output(answer)
 
-        # Optional: Show page number source
         if doc:
             page = doc.metadata.get("page_number", "Unknown")
-            with st.popover("📘 Source Info"):
+            with st.popover("\U0001F4D8 Source Info"):
                 st.markdown(f"Page: {page}")
                 st.markdown("*Extracted Text:*")
                 st.markdown(doc.page_content)
-
-
-
-
-# --- Floating Valuation Button ---
-#st.markdown("""
-#   <div class="floating-button">
-#      <form action="" method="post">
-#            <button onclick="window.location.reload();">Valuation 💰</button>
-#        </form>
-#    </div>
-#""", unsafe_allow_html=True)
