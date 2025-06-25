@@ -9,3 +9,4 @@ tqdm
 llama_cloud_services
 faiss-cpu
 markdown
+sentence-transformers
