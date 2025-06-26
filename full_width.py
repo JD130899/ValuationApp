@@ -12,7 +12,7 @@ from llama_cloud_services import LlamaParse
 from pdf2image import convert_from_path
 
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain.retrievers.document_compressors import TransformersRerank
+from sentence_transformers import CrossEncoder
 
 # --- Page Config ---
 st.set_page_config(page_title="ChatBot", layout="wide")
@@ -102,11 +102,24 @@ def get_vectorstores(docs):
     table_vs = FAISS.from_documents(table_docs, embed)
     return full_vs.as_retriever(), table_vs.as_retriever()
 
-# --- QA Chain Setup with Transformers Reranker ---
+# --- HuggingFace Manual Reranker ---
+class HuggingFaceReranker:
+    def __init__(self, model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"):
+        self.model = CrossEncoder(model_name)
+
+    def compress_documents(self, documents, query):
+        if not documents:
+            return []
+        pairs = [(query, doc.page_content) for doc in documents]
+        scores = self.model.predict(pairs)
+        sorted_docs = sorted(zip(documents, scores), key=lambda x: x[1], reverse=True)
+        return [doc for doc, _ in sorted_docs[:3]]  # top 3 only
+
+# --- QA Chain Setup with HF Reranker ---
 def get_qa_chains(full_ret, table_ret):
     llm = ChatOpenAI(temperature=0, openai_api_key=st.secrets["OPENAI_API_KEY"])
 
-    reranker = TransformersRerank(model="cross-encoder/ms-marco-MiniLM-L-6-v2")
+    reranker = HuggingFaceReranker()
     reranked_full_ret = ContextualCompressionRetriever(base_compressor=reranker, base_retriever=full_ret)
     reranked_table_ret = ContextualCompressionRetriever(base_compressor=reranker, base_retriever=table_ret)
 
