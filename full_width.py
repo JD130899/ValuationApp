@@ -1,6 +1,7 @@
 import streamlit as st
 import tempfile
 import time
+from transformers import AutoTokenizer, AutoModel
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
@@ -9,9 +10,6 @@ from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from llama_cloud_services import LlamaParse
 from pdf2image import convert_from_path
-
-from langchain.retrievers import ContextualCompressionRetriever
-from sentence_transformers import CrossEncoder
 
 # --- Page Config ---
 st.set_page_config(page_title="ChatBot", layout="wide")
@@ -64,15 +62,6 @@ valuation_triggered = valuation_clicked.button("Valuation 💰", key="valuation_
 user_input = st.chat_input("Message...")
 prompt = "What is the valuation?" if valuation_triggered else user_input
 
-# --- Query Preprocessing ---
-def preprocess_query(query):
-    q = query.lower()
-    if "adjusted" in q and "ebitda" in q:
-        return query + " (not just EBITDA, focus on adjusted EBITDA only)"
-    if "net sales" in q and any(y in q for y in ["2021", "2022", "2023", "2024", "2025"]):
-        return query + " (make sure year is exactly correct)"
-    return query
-
 # --- Parse PDF ---
 def parse_pdf():
     parser = LlamaParse(
@@ -93,7 +82,7 @@ def parse_pdf():
             lc_documents.append(Document(page_content=content, metadata=metadata))
     return lc_documents
 
-# --- Embeddings + FAISS Setup ---
+# --- FinBERT Embedding Setup ---
 def get_vectorstores(docs):
     embed = HuggingFaceEmbeddings(model_name="yiyanghkust/finbert-tone")
     table_docs = [doc for doc in docs if doc.metadata.get("type") == "table"]
@@ -101,27 +90,9 @@ def get_vectorstores(docs):
     table_vs = FAISS.from_documents(table_docs, embed)
     return full_vs.as_retriever(), table_vs.as_retriever()
 
-# --- Manual HuggingFace Reranker ---
-class HuggingFaceReranker:
-    def __init__(self, model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"):
-        self.model = CrossEncoder(model_name)
-
-    def compress_documents(self, documents, query):
-        if not documents:
-            return []
-        pairs = [(query, doc.page_content) for doc in documents]
-        scores = self.model.predict(pairs)
-        sorted_docs = sorted(zip(documents, scores), key=lambda x: x[1], reverse=True)
-        return [doc for doc, _ in sorted_docs[:3]]
-
 # --- QA Chain Setup ---
 def get_qa_chains(full_ret, table_ret):
     llm = ChatOpenAI(temperature=0, openai_api_key=st.secrets["OPENAI_API_KEY"])
-
-    reranker = HuggingFaceReranker()
-    reranked_full_ret = ContextualCompressionRetriever(base_compressor=reranker, base_retriever=full_ret)
-    reranked_table_ret = ContextualCompressionRetriever(base_compressor=reranker, base_retriever=table_ret)
-
     custom_prompt = PromptTemplate.from_template("""
 You are a helpful financial assistant. Based on the context below, extract markdown tables exactly as is without any modifications or reformatting. Do not summarize. Only include the table using proper markdown format.
 
@@ -131,9 +102,8 @@ Context:
 Question:
 {question}
 """)
-
-    qa_full = RetrievalQA.from_chain_type(llm=llm, retriever=reranked_full_ret, return_source_documents=True)
-    qa_table = RetrievalQA.from_chain_type(llm=llm, retriever=reranked_table_ret, return_source_documents=True, chain_type_kwargs={"prompt": custom_prompt})
+    qa_full = RetrievalQA.from_chain_type(llm=llm, retriever=full_ret, return_source_documents=True)
+    qa_table = RetrievalQA.from_chain_type(llm=llm, retriever=table_ret, return_source_documents=True, chain_type_kwargs={"prompt": custom_prompt})
     return qa_full, qa_table
 
 # --- First Run Initialization ---
@@ -174,8 +144,7 @@ if prompt:
     chain = st.session_state.qa_chain_table if any(k in prompt.lower() for k in keywords) else st.session_state.qa_chain_full
 
     with st.spinner("Thinking..."):
-        refined_prompt = preprocess_query(prompt)
-        result = chain.invoke({"query": refined_prompt})
+        result = chain.invoke({"query": prompt})
         answer = result["result"]
         doc = result["source_documents"][0] if result["source_documents"] else None
 
@@ -186,9 +155,6 @@ if prompt:
             page = doc.metadata.get("page_number", "Unknown")
             with st.popover("📘 Source Info"):
                 st.markdown(f"Page: {page}")
-                st.markdown("### 🔍 Retrieved Snippet")
-                st.code(doc.page_content[:600])
-
                 with tempfile.TemporaryDirectory() as tmp:
                     images = convert_from_path(PDF_PATH, dpi=150, first_page=page, last_page=page, output_folder=tmp)
                     if images:
