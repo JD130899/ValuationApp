@@ -12,7 +12,8 @@ from llama_cloud_services import LlamaParse
 from pdf2image import convert_from_path
 
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain_cohere import CohereReranker
+from langchain.retrievers.document_compressors import CohereReranker
+
 
 # --- Page Config ---
 st.set_page_config(page_title="ChatBot", layout="wide")
