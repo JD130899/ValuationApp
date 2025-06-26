@@ -11,6 +11,9 @@ from langchain.prompts import PromptTemplate
 from llama_cloud_services import LlamaParse
 from pdf2image import convert_from_path
 
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain_cohere import CohereReranker
+
 # --- Page Config ---
 st.set_page_config(page_title="ChatBot", layout="wide")
 
@@ -62,6 +65,15 @@ valuation_triggered = valuation_clicked.button("Valuation 💰", key="valuation_
 user_input = st.chat_input("Message...")
 prompt = "What is the valuation?" if valuation_triggered else user_input
 
+# --- Query Preprocessing ---
+def preprocess_query(query):
+    q = query.lower()
+    if "adjusted" in q and "ebitda" in q:
+        return query + " (not just EBITDA, focus on adjusted EBITDA only)"
+    if "net sales" in q and any(y in q for y in ["2021", "2022", "2023", "2024", "2025"]):
+        return query + " (make sure year is exactly correct)"
+    return query
+
 # --- Parse PDF ---
 def parse_pdf():
     parser = LlamaParse(
@@ -90,9 +102,14 @@ def get_vectorstores(docs):
     table_vs = FAISS.from_documents(table_docs, embed)
     return full_vs.as_retriever(), table_vs.as_retriever()
 
-# --- QA Chain Setup ---
+# --- QA Chain Setup with Reranker ---
 def get_qa_chains(full_ret, table_ret):
     llm = ChatOpenAI(temperature=0, openai_api_key=st.secrets["OPENAI_API_KEY"])
+
+    reranker = CohereReranker(cohere_api_key=st.secrets["COHERE_API_KEY"])
+    reranked_full_ret = ContextualCompressionRetriever(base_compressor=reranker, base_retriever=full_ret)
+    reranked_table_ret = ContextualCompressionRetriever(base_compressor=reranker, base_retriever=table_ret)
+
     custom_prompt = PromptTemplate.from_template("""
 You are a helpful financial assistant. Based on the context below, extract markdown tables exactly as is without any modifications or reformatting. Do not summarize. Only include the table using proper markdown format.
 
@@ -102,8 +119,9 @@ Context:
 Question:
 {question}
 """)
-    qa_full = RetrievalQA.from_chain_type(llm=llm, retriever=full_ret, return_source_documents=True)
-    qa_table = RetrievalQA.from_chain_type(llm=llm, retriever=table_ret, return_source_documents=True, chain_type_kwargs={"prompt": custom_prompt})
+
+    qa_full = RetrievalQA.from_chain_type(llm=llm, retriever=reranked_full_ret, return_source_documents=True)
+    qa_table = RetrievalQA.from_chain_type(llm=llm, retriever=reranked_table_ret, return_source_documents=True, chain_type_kwargs={"prompt": custom_prompt})
     return qa_full, qa_table
 
 # --- First Run Initialization ---
@@ -144,7 +162,8 @@ if prompt:
     chain = st.session_state.qa_chain_table if any(k in prompt.lower() for k in keywords) else st.session_state.qa_chain_full
 
     with st.spinner("Thinking..."):
-        result = chain.invoke({"query": prompt})
+        refined_prompt = preprocess_query(prompt)
+        result = chain.invoke({"query": refined_prompt})
         answer = result["result"]
         doc = result["source_documents"][0] if result["source_documents"] else None
 
@@ -155,6 +174,9 @@ if prompt:
             page = doc.metadata.get("page_number", "Unknown")
             with st.popover("📘 Source Info"):
                 st.markdown(f"Page: {page}")
+                st.markdown("### 🔍 Retrieved Snippet")
+                st.code(doc.page_content[:600])
+
                 with tempfile.TemporaryDirectory() as tmp:
                     images = convert_from_path(PDF_PATH, dpi=150, first_page=page, last_page=page, output_folder=tmp)
                     if images:
