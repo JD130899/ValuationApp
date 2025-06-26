@@ -1,7 +1,7 @@
 import streamlit as st
 import tempfile
 import time
-from transformers import AutoTokenizer, AutoModel
+from transformers import pipeline
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
@@ -12,8 +12,7 @@ from llama_cloud_services import LlamaParse
 from pdf2image import convert_from_path
 
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain.retrievers.document_compressors import CohereReranker
-
+from langchain.retrievers.document_compressors import TransformersRerank
 
 # --- Page Config ---
 st.set_page_config(page_title="ChatBot", layout="wide")
@@ -103,11 +102,11 @@ def get_vectorstores(docs):
     table_vs = FAISS.from_documents(table_docs, embed)
     return full_vs.as_retriever(), table_vs.as_retriever()
 
-# --- QA Chain Setup with Reranker ---
+# --- QA Chain Setup with Transformers Reranker ---
 def get_qa_chains(full_ret, table_ret):
     llm = ChatOpenAI(temperature=0, openai_api_key=st.secrets["OPENAI_API_KEY"])
 
-    reranker = CohereReranker(cohere_api_key=st.secrets["COHERE_API_KEY"])
+    reranker = TransformersRerank(model="cross-encoder/ms-marco-MiniLM-L-6-v2")
     reranked_full_ret = ContextualCompressionRetriever(base_compressor=reranker, base_retriever=full_ret)
     reranked_table_ret = ContextualCompressionRetriever(base_compressor=reranker, base_retriever=table_ret)
 
