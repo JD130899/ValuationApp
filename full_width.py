@@ -1,7 +1,6 @@
 import streamlit as st
 import tempfile
 import time
-from transformers import pipeline
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
@@ -94,7 +93,7 @@ def parse_pdf():
             lc_documents.append(Document(page_content=content, metadata=metadata))
     return lc_documents
 
-# --- FinBERT Embedding Setup ---
+# --- Embeddings + FAISS Setup ---
 def get_vectorstores(docs):
     embed = HuggingFaceEmbeddings(model_name="yiyanghkust/finbert-tone")
     table_docs = [doc for doc in docs if doc.metadata.get("type") == "table"]
@@ -102,7 +101,7 @@ def get_vectorstores(docs):
     table_vs = FAISS.from_documents(table_docs, embed)
     return full_vs.as_retriever(), table_vs.as_retriever()
 
-# --- HuggingFace Manual Reranker ---
+# --- Manual HuggingFace Reranker ---
 class HuggingFaceReranker:
     def __init__(self, model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"):
         self.model = CrossEncoder(model_name)
@@ -113,9 +112,9 @@ class HuggingFaceReranker:
         pairs = [(query, doc.page_content) for doc in documents]
         scores = self.model.predict(pairs)
         sorted_docs = sorted(zip(documents, scores), key=lambda x: x[1], reverse=True)
-        return [doc for doc, _ in sorted_docs[:3]]  # top 3 only
+        return [doc for doc, _ in sorted_docs[:3]]
 
-# --- QA Chain Setup with HF Reranker ---
+# --- QA Chain Setup ---
 def get_qa_chains(full_ret, table_ret):
     llm = ChatOpenAI(temperature=0, openai_api_key=st.secrets["OPENAI_API_KEY"])
 
