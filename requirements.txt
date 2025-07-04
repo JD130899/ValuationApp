@@ -2,6 +2,9 @@ streamlit
 openai
 langchain==0.1.17
 langchain-community
+langchain-core
+langchain-openai
+langchain-text-splitters
 transformers
 torch
 faiss-cpu
@@ -10,5 +13,7 @@ Pillow
 tqdm
 markdown
 sentence-transformers
-llama_cloud_services
+llama-cloud-services
 pypdf
+cohere
+scikit-learn
