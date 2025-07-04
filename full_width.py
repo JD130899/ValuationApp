@@ -1,170 +1,283 @@
 import streamlit as st
-import tempfile
-import time
-from transformers import AutoTokenizer, AutoModel
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-from langchain.chains import RetrievalQA
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from llama_cloud_services import LlamaParse
+from llama_parse import LlamaParse
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.vectorstores import FAISS
+from langchain_core.prompts import PromptTemplate
+import time
+import numpy as np
+import os
 from pdf2image import convert_from_path
+import tempfile
+import difflib
+from langchain_community.embeddings import CohereEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain.retrievers.document_compressors import CohereRerank
+from langchain.retrievers import ContextualCompressionRetriever
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
-# --- Page Config ---
-st.set_page_config(page_title="ChatBot", layout="wide")
+from langchain.retrievers.multi_query import MultiQueryRetriever
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import TextLoader
+import os
+# --- Streamlit UI Config ---
+st.set_page_config(page_title="Valuation RAG Chatbot", layout="wide")
 
 # --- CSS Styling ---
 st.markdown("""
     <style>
-        .stApp { background-color: black; color: white; }
+        .stApp {
+            background-color: black;
+            color: white;
+        }
         .user-bubble {
-            background-color: #2a2a2a; color: white;
-            padding: 10px; border-radius: 12px; max-width: 60%;
-            float: right; margin: 5px 0 10px auto; text-align: right;
+            background-color: #2a2a2a;
+            color: white;
+            padding: 10px;
+            border-radius: 12px;
+            max-width: 60%;
+            float: right;
+            margin: 5px 0 10px auto;
+            text-align: right;
         }
         .assistant-bubble {
-            background-color: #1e1e1e; color: white;
-            padding: 10px; border-radius: 12px; max-width: 60%;
-            float: left; margin: 5px auto 10px 0; text-align: left;
+            background-color: #1e1e1e;
+            color: white;
+            padding: 10px;
+            border-radius: 12px;
+            max-width: 60%;
+            float: left;
+            margin: 5px auto 10px 0;
+            text-align: left;
         }
-        .clearfix::after { content: ""; display: block; clear: both; }
+        .clearfix::after {
+            content: "";
+            display: block;
+            clear: both;
+        }
         .floating-button {
-            position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
         }
         .floating-button button {
-            background-color: #444 !important; color: white !important;
-            padding: 10px 18px; border-radius: 999px; border: none;
+            background-color: #444 !important;
+            color: white !important;
+            padding: 10px 18px;
+            border-radius: 999px;
+            border: none;
         }
     </style>
 """, unsafe_allow_html=True)
 
+def typewriter_output(answer):
+    if answer.strip().startswith("```markdown"):
+        # Extract markdown table from triple backticks
+        markdown_table = answer.strip().removeprefix("```markdown").removesuffix("```").strip()
+        st.markdown(markdown_table)  # Proper markdown rendering (table)
+    else:
+        # Use typewriter effect for regular text responses
+        container = st.empty()
+        typed = ""
+        for char in answer:
+            typed += char
+            container.markdown(f"<div class='assistant-bubble clearfix'>{typed}</div>", unsafe_allow_html=True)
+            time.sleep(0.008)
+
+
+# --- Title ---
 st.title("Underwriting Agent")
 
-# --- PDF Upload Logic ---
-uploaded_pdf = st.file_uploader("Upload a Valuation PDF", type=["pdf"])
-if uploaded_pdf is not None:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        tmp_file.write(uploaded_pdf.read())
-        PDF_PATH = tmp_file.name
-else:
-    st.stop()
+# --- Constants ---
+PDF_PATH = "/Users/jaipdalvi/Desktop/Work/Value Buddy, Inc./Code/Galligan Holdings Certified Valuation Report.pdf"
 
-# --- Session State Setup ---
+# --- Session State ---
 if "initialized" not in st.session_state:
     st.session_state.initialized = False
     st.session_state.messages = []
+    st.session_state.docs = []
+    st.session_state.vector_store = None
+    st.session_state.retriever = None
     st.session_state.messages.append({"role": "assistant", "content": "Hi! I am here to answer any questions you may have about your valuation report."})
     st.session_state.messages.append({"role": "assistant", "content": "What can I help you with?"})
 
-valuation_clicked = st.empty()
-valuation_triggered = valuation_clicked.button("Valuation 💰", key="valuation_btn", help="Click to ask about valuation")
-user_input = st.chat_input("Message...")
-prompt = "What is the valuation?" if valuation_triggered else user_input
 
-# --- Parse PDF ---
+# Step 1: Parsing Pdf
 def parse_pdf():
-    parser = LlamaParse(
-        api_key=st.secrets["LLAMA_CLOUD_API_KEY"],
-        num_workers=4,
-        verbose=False,
-        language="en"
-    )
-    result = parser.parse(PDF_PATH)
-    lc_documents = []
+    parser = LlamaParse(api_key="llx-GXPHf09BoCtf4RciC9CqmLMRvMAdMM1X6taKcwhWGKxVFP4S", num_workers=4)
+    result = parser.parse("/Users/jaipdalvi/Desktop/Work/Gen AI/Langchain/Galligan Holdings Certified Valuation Report.pdf")
+    
+    pages = []
     for page in result.pages:
-        if page.md.strip():
-            content = page.md.strip()
-            is_table = ('|' in content and any(line.strip().startswith('|') and '---' in line for line in content.splitlines()))
-            metadata = {"page_number": page.page}
-            if is_table:
-                metadata["type"] = "table"
-            lc_documents.append(Document(page_content=content, metadata=metadata))
-    return lc_documents
+        content = page.md.strip()
+        
+        # Clean unwanted "null" and empty lines
+        cleaned_lines = [
+            line for line in content.splitlines()
+            if line.strip().lower() != "null" and line.strip() != ""
+        ]
+        
+        cleaned_content = "\n".join(cleaned_lines)
 
-# --- FinBERT Embedding Setup ---
-def get_vectorstores(docs):
-    embed = HuggingFaceEmbeddings(model_name="yiyanghkust/finbert-tone")
-    table_docs = [doc for doc in docs if doc.metadata.get("type") == "table"]
-    full_vs = FAISS.from_documents(docs, embed)
-    table_vs = FAISS.from_documents(table_docs, embed)
-    return full_vs.as_retriever(), table_vs.as_retriever()
+        # Hard coding   
+        if "| Score | China Exposure" in cleaned_content and "Vulnerability" not in cleaned_content:
+            cleaned_content = cleaned_content.replace("| Score |", "| Vulnerability Score |")
+        
+        if cleaned_content:
+            pages.append(Document(page_content=cleaned_content, metadata={"page_number": page.page}))
+    
+    return pages
 
-# --- QA Chain Setup ---
-def get_qa_chains(full_ret, table_ret):
-    llm = ChatOpenAI(temperature=0, openai_api_key=st.secrets["OPENAI_API_KEY"])
-    custom_prompt = PromptTemplate.from_template("""
-You are a helpful financial assistant. Based on the context below, extract markdown tables exactly as is without any modifications or reformatting. Do not summarize. Only include the table using proper markdown format.
 
-Context:
-{context}
 
-Question:
-{question}
-""")
-    qa_full = RetrievalQA.from_chain_type(llm=llm, retriever=full_ret, return_source_documents=True)
-    qa_table = RetrievalQA.from_chain_type(llm=llm, retriever=table_ret, return_source_documents=True, chain_type_kwargs={"prompt": custom_prompt})
-    return qa_full, qa_table
 
-# --- First Run Initialization ---
+
+def find_best_matching_doc_embedding(answer_text, retrieved_docs, embedder):
+    # Embed the answer text
+    answer_emb = embedder.embed_query(answer_text)
+
+    # Track best match
+    best_doc = None
+    best_score = -1
+
+    for doc in retrieved_docs:
+        doc_emb = embedder.embed_query(doc.page_content)
+        score = np.dot(answer_emb, doc_emb) / (np.linalg.norm(answer_emb) * np.linalg.norm(doc_emb))
+        if score > best_score:
+            best_score = score
+            best_doc = doc
+
+    return best_doc
+
+
+
+user_question = st.chat_input("Message...")
+
+# --- Initial Load ---
 if not st.session_state.initialized:
     with st.spinner("Parsing PDF..."):
         docs = parse_pdf()
+
+    with st.spinner("Chunking content..."):
+        splitter = RecursiveCharacterTextSplitter(chunk_size=3000,chunk_overlap=0,separators=["\n"])
+        split_docs = splitter.split_documents(docs)
+    
+        for idx, doc in enumerate(split_docs, start=1):
+            doc.metadata["chunk_id"] = idx        
+            page = doc.metadata.get("page_number", "-")
+
     with st.spinner("Building vectorstore..."):
-        full_ret, table_ret = get_vectorstores(docs)
-    with st.spinner("Setting up QA chains..."):
-        qa_full, qa_table = get_qa_chains(full_ret, table_ret)
+        os.environ["COHERE_API_KEY"] = "qeNFbHVCZhyb1pmOhlcNYIAMItuV4xCOQwk4OSq0"
+        embedding = CohereEmbeddings(model="embed-english-v3.0", user_agent="langchain")
+
+        # Step 3: Create FAISS vector store
+        vectorstore = FAISS.from_documents(split_docs, embedding)
+
+        # Step 4: Create MMR Retriever from FAISS
+        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 5,"fetch_k": 10,"lambda_mult":0.9}) #k:50, fetch_k:100
+
+        # Step 5: Add Cohere reranker
+        reranker = CohereRerank(model="rerank-english-v3.0", user_agent="langchain") #by default top_n=3
+
+        # Step 6: Wrap in ContextualCompressionRetriever
+        final_retriever = ContextualCompressionRetriever(
+            base_retriever=retriever,
+            base_compressor=reranker,
+        )
+
+
+        
+
     st.session_state.docs = docs
-    st.session_state.full_retriever = full_ret
-    st.session_state.table_retriever = table_ret
-    st.session_state.qa_chain_full = qa_full
-    st.session_state.qa_chain_table = qa_table
+    st.session_state.vector_store = vectorstore
+    st.session_state.retriever = final_retriever
     st.session_state.initialized = True
 
-# --- Show Chat History ---
+
+# --- Show chat history ---
 for msg in st.session_state.messages:
     role_class = "user-bubble" if msg["role"] == "user" else "assistant-bubble"
-    st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
+    if msg["content"].strip().startswith("```markdown"):
+    # Render markdown table properly
+        markdown_table = msg["content"].strip().removeprefix("```markdown").removesuffix("```").strip()
+        st.markdown(markdown_table)
+    else:
+        # Render regular bubble
+        st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
 
-# --- Typing Animation ---
-def typewriter_output(answer):
-    container = st.empty()
-    typed = ""
-    for char in answer:
-        typed += char
-        container.markdown(f"<div class='assistant-bubble clearfix'>{typed}</div>", unsafe_allow_html=True)
-        time.sleep(0.008)
 
-# --- Handle Query ---
-if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.markdown(f"<div class='user-bubble clearfix'>{prompt}</div>", unsafe_allow_html=True)
 
-    keywords = ["valuation", "cost", "expense", "amount", "revenue", "income", "EBITDA", "price", "value", "table", "rate", "component"]
-    chain = st.session_state.qa_chain_table if any(k in prompt.lower() for k in keywords) else st.session_state.qa_chain_full
 
-    with st.spinner("Thinking..."):
-        result = chain.invoke({"query": prompt})
-        answer = result["result"]
-        doc = result["source_documents"][0] if result["source_documents"] else None
 
-        st.session_state.messages.append({"role": "assistant", "content": answer})
-        typewriter_output(answer)
+# --- Answer logic ---
+if user_question:
+    with st.spinner("Retrieving context..."):
+        retrieved_docs = st.session_state.retriever.invoke(user_question)
+        print(retrieved_docs)
+        for doc in retrieved_docs:
+            print(doc.page_content)
+        context_text = "\n\n".join(doc.page_content for doc in retrieved_docs)
 
-        if doc:
-            page = doc.metadata.get("page_number", "Unknown")
-            with st.popover("📘 Source Info"):
-                st.markdown(f"Page: {page}")
-                with tempfile.TemporaryDirectory() as tmp:
-                    images = convert_from_path(PDF_PATH, dpi=150, first_page=page, last_page=page, output_folder=tmp)
-                    if images:
-                        st.image(images[0], caption=f"Page {page}", use_container_width=True)
+    prompt = PromptTemplate(
+    template = """
+    You are a financial-data extraction assistant.
 
-# --- Floating Valuation Button ---
-st.markdown("""
-    <div class="floating-button">
-        <form action="" method="post">
-            <button onclick="window.location.reload();">Valuation 💰</button>
-        </form>
-    </div>
-""", unsafe_allow_html=True)
+    **Use ONLY what appears under “Context”.**
+
+    ### How to answer
+    1. **Single value questions**  
+    • Find the row + column that match the user's words.  
+    • Return the answer in a **short, clear sentence** using the exact number from the context.  
+        Example: “The Income (DCF) approach value is $1,150,000.”  
+    • **Do NOT repeat the metric name or company name** unless the user asks.
+
+    2. **Table questions**  
+    • Return the full table **with its header row** in GitHub-flavoured markdown.
+
+    3. **Theory/textual question**  
+    • Try to return an explanation **based on the context**.
+
+    If you still cannot see the answer, reply **“I don't know.”**
+
+    ---
+    Context:
+    {context}
+
+    ---
+    Question: {question}
+    Answer:""",
+        input_variables=["context", "question"]
+    )
+
+    final_prompt = prompt.invoke({"context": context_text, "question": user_question})
+
+    st.session_state.messages.append({"role": "user", "content": user_question})
+    st.markdown(f"<div class='user-bubble clearfix'>{user_question}</div>", unsafe_allow_html=True)
+
+    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+
+    #with st.spinner("Thinking..."):
+    response = llm.invoke(final_prompt)
+    #st.markdown(f"<div class='assistant-bubble clearfix'>{response.content}</div>", unsafe_allow_html=True)
+
+    typewriter_output(response.content)
+    st.session_state.messages.append({"role": "assistant", "content": response.content})
+
+    embedder = CohereEmbeddings(model="embed-english-v3.0", user_agent="langchain")
+    matched_doc = find_best_matching_doc_embedding(response.content, retrieved_docs, embedder)
+
+    if matched_doc:
+        page = matched_doc.metadata.get("page_number", "Unknown")
+        with st.popover("📘 Source Info"):
+            st.markdown(f"**Page: {page}**")
+            st.markdown("---")
+            st.markdown(matched_doc.page_content)
+
+
+
+    
+
+    
