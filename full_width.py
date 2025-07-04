@@ -1,6 +1,6 @@
 import streamlit as st
 from langchain_core.documents import Document
-from llama_cloud_services import LlamaParse
+from llama_parse import LlamaParse
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
@@ -92,16 +92,7 @@ def typewriter_output(answer):
 st.title("Underwriting Agent")
 
 # --- Constants ---
-#PDF_PATH = "/Users/jaipdalvi/Desktop/Work/Value Buddy, Inc./Code/Galligan Holdings Certified Valuation Report.pdf"
-
-# --- PDF Upload Logic ---
-uploaded_pdf = st.file_uploader("Upload a Valuation PDF", type=["pdf"])
-if uploaded_pdf is not None:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        tmp_file.write(uploaded_pdf.read())
-        PDF_PATH = tmp_file.name
-else:
-    st.stop()
+PDF_PATH = "/Users/jaipdalvi/Desktop/Work/Value Buddy, Inc./Code/Galligan Holdings Certified Valuation Report.pdf"
 
 # --- Session State ---
 if "initialized" not in st.session_state:
@@ -117,7 +108,7 @@ if "initialized" not in st.session_state:
 # Step 1: Parsing Pdf
 def parse_pdf():
     parser = LlamaParse(api_key="llx-GXPHf09BoCtf4RciC9CqmLMRvMAdMM1X6taKcwhWGKxVFP4S", num_workers=4)
-    result = parser.parse(PDF_PATH)
+    result = parser.parse("/Users/jaipdalvi/Desktop/Work/Gen AI/Langchain/Galligan Holdings Certified Valuation Report.pdf")
     
     pages = []
     for page in result.pages:
@@ -186,7 +177,7 @@ if not st.session_state.initialized:
         vectorstore = FAISS.from_documents(split_docs, embedding)
 
         # Step 4: Create MMR Retriever from FAISS
-        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 5,"fetch_k": 10,"lambda_mult":0.9}) #k:50, fetch_k:100
+        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 25,"fetch_k": 30,"lambda_mult":0.9}) #k:50, fetch_k:100
 
         # Step 5: Add Cohere reranker
         reranker = CohereRerank(model="rerank-english-v3.0", user_agent="langchain") #by default top_n=3
