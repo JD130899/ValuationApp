@@ -173,7 +173,7 @@ if not st.session_state.initialized:
         vectorstore = FAISS.from_documents(split_docs, embedding)
 
         # Step 4: Create MMR Retriever from FAISS
-        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 25,"fetch_k": 40,"lambda_mult":0.9}) #k:50, fetch_k:100
+        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 35,"fetch_k": 40,"lambda_mult":0.9}) #k:50, fetch_k:100
 
         # Step 5: Add Cohere reranker
         reranker = CohereRerank(model="rerank-english-v3.0", user_agent="langchain") #by default top_n=3
