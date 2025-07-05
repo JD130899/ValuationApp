@@ -1,6 +1,6 @@
 import streamlit as st
 from langchain_core.documents import Document
-from llama_parse import LlamaParse
+from llama_cloud_services import LlamaParse
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
