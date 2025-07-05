@@ -76,7 +76,13 @@ st.markdown("""
 def typewriter_output(answer):
     if answer.strip().startswith("```markdown"):
         # Extract markdown table from triple backticks
-        markdown_table = answer.strip().removeprefix("```markdown").removesuffix("```").strip()
+        markdown_table = (
+        answer.strip()
+        .removeprefix("```markdown")
+        .removesuffix("```")
+        .replace("</div>", "")
+        .strip()
+        )
         st.markdown(markdown_table)  # Proper markdown rendering (table)
     else:
         # Use typewriter effect for regular text responses
