@@ -238,7 +238,6 @@ if user_question:
     • **Do NOT repeat the metric name or company name** unless the user asks.
 
     2. **Table questions**  
-    • If the user refers to a table by an abbreviation (like "DCF table"), extract the Discounted Cash Flow table
     • Return the full table **with its header row** in GitHub-flavoured markdown.
 
     3. **Theory/textual question**  
