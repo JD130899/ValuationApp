@@ -244,7 +244,7 @@ if user_question:
     3. **Theory/textual question**  
     • Try to return an explanation **based on the context**.
 
-    4. Users may refer to financial terms using either abbreviations or full forms.  
+    4. Users may refer to financial terms using either abbreviations (e.g., "DCF") or full forms (e.g., "Discounted Cash Flow").  
        Assume both mean the same if they appear related in the context.
 
     If you still cannot see the answer, reply **“I don't know.”**
