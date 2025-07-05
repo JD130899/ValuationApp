@@ -135,22 +135,11 @@ def parse_pdf():
 
 
 
-def find_best_matching_doc_embedding(answer_text, retrieved_docs, embedder):
-    # Embed the answer text
-    answer_emb = embedder.embed_query(answer_text)
+def find_best_matching_doc_reranker(answer_text, retrieved_docs, reranker):
+    # Rerank based on similarity between the model's answer and each doc
+    reranked = reranker.compress_documents(retrieved_docs, query=answer_text)
+    return reranked[0] if reranked else None
 
-    # Track best match
-    best_doc = None
-    best_score = -1
-
-    for doc in retrieved_docs:
-        doc_emb = embedder.embed_query(doc.page_content)
-        score = np.dot(answer_emb, doc_emb) / (np.linalg.norm(answer_emb) * np.linalg.norm(doc_emb))
-        if score > best_score:
-            best_score = score
-            best_doc = doc
-
-    return best_doc
 
 
 
@@ -194,6 +183,7 @@ if not st.session_state.initialized:
     st.session_state.docs = docs
     st.session_state.vector_store = vectorstore
     st.session_state.retriever = final_retriever
+    st.session_state.reranker = reranker  # ✅ store for later use
     st.session_state.initialized = True
 
 
@@ -266,8 +256,8 @@ if user_question:
     typewriter_output(response.content)
     st.session_state.messages.append({"role": "assistant", "content": response.content})
 
-    embedder = CohereEmbeddings(model="embed-english-v3.0", user_agent="langchain")
-    matched_doc = find_best_matching_doc_embedding(response.content, retrieved_docs, embedder)
+    
+    matched_doc = find_best_matching_doc_reranker(response.content, retrieved_docs, st.session_state.reranker)
 
     if matched_doc:
         page = matched_doc.metadata.get("page_number", "Unknown")
