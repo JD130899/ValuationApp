@@ -176,7 +176,7 @@ if not st.session_state.initialized:
         retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 50,"fetch_k": 100,"lambda_mult":0.9}) #k:50, fetch_k:100
 
         # Step 5: Add Cohere reranker
-        reranker = CohereRerank(model="rerank-english-v3.0", user_agent="langchain") #by default top_n=3
+        reranker = CohereRerank(model="rerank-english-v3.0", user_agent="langchain",top_n=5) #by default top_n=3
 
         # Step 6: Wrap in ContextualCompressionRetriever
         final_retriever = ContextualCompressionRetriever(
