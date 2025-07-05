@@ -17,7 +17,7 @@ from langchain.retrievers.document_compressors import CohereRerank
 from langchain.retrievers import ContextualCompressionRetriever
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-
+import tempfile
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import TextLoader
@@ -263,9 +263,10 @@ if user_question:
         page = matched_doc.metadata.get("page_number", "Unknown")
         with st.popover("📘 Source Info"):
             st.markdown(f"**Page: {page}**")
-            st.markdown("---")
-            st.markdown(matched_doc.page_content)
-
+            with tempfile.TemporaryDirectory() as tmp:
+                images = convert_from_path(PDF_PATH, dpi=150, first_page=page, last_page=page, output_folder=tmp)
+                if images:
+                    st.image(images[0], caption=f"Page {page}", use_container_width=True)
 
 
     
