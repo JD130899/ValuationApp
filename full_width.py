@@ -173,7 +173,7 @@ if not st.session_state.initialized:
         vectorstore = FAISS.from_documents(split_docs, embedding)
 
         # Step 4: Create MMR Retriever from FAISS
-        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 25,"fetch_k": 30,"lambda_mult":0.9}) #k:50, fetch_k:100
+        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 40,"fetch_k": 50,"lambda_mult":0.9}) #k:50, fetch_k:100
 
         # Step 5: Add Cohere reranker
         reranker = CohereRerank(model="rerank-english-v3.0", user_agent="langchain") #by default top_n=3
@@ -211,12 +211,13 @@ if "source_image" in st.session_state:
         st.markdown(f"**Page: {st.session_state.source_page}**")
         st.image(st.session_state.source_image, caption=f"Page {st.session_state.source_page}", use_container_width=True)
 
-
+"""
 def smart_expand_abbreviations(question, context):
     for abbr, full in abbreviation_map.items():
         if abbr in question and full in context:
             question = question.replace(abbr, full)
     return question
+"""    
 
 
 
@@ -264,11 +265,12 @@ if user_question:
     )
 
     # --- Expand abbreviations in user question if their full forms exist in context ---
+    """
     abbreviation_map = {
         "DCF": "Discounted Cash Flow"
     }
     user_question = smart_expand_abbreviations(user_question, context_text)
-
+    """
 
     final_prompt = prompt.invoke({"context": context_text, "question": user_question})
 
