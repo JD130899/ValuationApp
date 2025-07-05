@@ -257,12 +257,7 @@ if user_question:
     )
 
     # --- Expand abbreviations in user question if their full forms exist in context ---
-    """
-    abbreviation_map = {
-        "DCF": "Discounted Cash Flow"
-    }
-    user_question = smart_expand_abbreviations(user_question, context_text)
-    """
+   
 
     final_prompt = prompt.invoke({"context": context_text, "question": user_question})
 
