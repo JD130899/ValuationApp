@@ -205,6 +205,13 @@ for msg in st.session_state.messages:
         # Render regular bubble
         st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
 
+# --- Persistent Source Info display ---
+if "source_image" in st.session_state:
+    with st.popover("📘 Source Info"):
+        st.markdown(f"**Page: {st.session_state.source_page}**")
+        st.image(st.session_state.source_image, caption=f"Page {st.session_state.source_page}", use_container_width=True)
+
+
 
 
 
@@ -274,6 +281,8 @@ if user_question:
                 images = convert_from_path(PDF_PATH, dpi=150, first_page=page, last_page=page, output_folder=tmp)
                 if images:
                     st.image(images[0], caption=f"Page {page}", use_container_width=True)
+                    st.session_state.source_image = images[0]
+                    st.session_state.source_page = page
 
 
     
