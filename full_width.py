@@ -91,8 +91,15 @@ def typewriter_output(answer):
 # --- Title ---
 st.title("Underwriting Agent")
 
-# --- Constants ---
-PDF_PATH = "/Users/jaipdalvi/Desktop/Work/Value Buddy, Inc./Code/Galligan Holdings Certified Valuation Report.pdf"
+
+# --- PDF Upload Logic ---
+uploaded_pdf = st.file_uploader("Upload a Valuation PDF", type=["pdf"])
+if uploaded_pdf is not None:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        tmp_file.write(uploaded_pdf.read())
+        PDF_PATH = tmp_file.name
+else:
+    st.stop()
 
 # --- Session State ---
 if "initialized" not in st.session_state:
@@ -108,7 +115,7 @@ if "initialized" not in st.session_state:
 # Step 1: Parsing Pdf
 def parse_pdf():
     parser = LlamaParse(api_key="llx-GXPHf09BoCtf4RciC9CqmLMRvMAdMM1X6taKcwhWGKxVFP4S", num_workers=4)
-    result = parser.parse("/Users/jaipdalvi/Desktop/Work/Gen AI/Langchain/Galligan Holdings Certified Valuation Report.pdf")
+    result = parser.parse(PDF_PATH)
     
     pages = []
     for page in result.pages:
