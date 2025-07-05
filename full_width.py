@@ -230,6 +230,9 @@ if user_question:
 
     **Use ONLY what appears under “Context”.**
 
+    ### Common Abbreviations
+    1. DCF = Discounted Cash Flow  
+
     ### How to answer
     1. **Single value questions**  
     • Find the row + column that match the user's words.  
