@@ -212,7 +212,11 @@ if "source_image" in st.session_state:
         st.image(st.session_state.source_image, caption=f"Page {st.session_state.source_page}", use_container_width=True)
 
 
-
+def smart_expand_abbreviations(question, context):
+    for abbr, full in abbreviation_map.items():
+        if abbr in question and full in context:
+            question = question.replace(abbr, full)
+    return question
 
 
 
@@ -258,6 +262,13 @@ if user_question:
     Answer:""",
         input_variables=["context", "question"]
     )
+
+    # --- Expand abbreviations in user question if their full forms exist in context ---
+    abbreviation_map = {
+        "DCF": "Discounted Cash Flow"
+    }
+    user_question = smart_expand_abbreviations(user_question, context_text)
+
 
     final_prompt = prompt.invoke({"context": context_text, "question": user_question})
 
