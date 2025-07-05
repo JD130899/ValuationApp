@@ -173,7 +173,7 @@ if not st.session_state.initialized:
         vectorstore = FAISS.from_documents(split_docs, embedding)
 
         # Step 4: Create MMR Retriever from FAISS
-        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 25,"fetch_k": 30,"lambda_mult":0.9}) #k:50, fetch_k:100
+        retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 25,"fetch_k": 40,"lambda_mult":0.9}) #k:50, fetch_k:100
 
         # Step 5: Add Cohere reranker
         reranker = CohereRerank(model="rerank-english-v3.0", user_agent="langchain") #by default top_n=3
@@ -243,8 +243,6 @@ if user_question:
     3. **Theory/textual question**  
     • Try to return an explanation **based on the context**.
 
-    4. Users may refer to financial terms using either abbreviations (e.g., "DCF") or full forms (e.g., "Discounted Cash Flow").  
-       Assume both mean the same if they appear related in the context.
 
     If you still cannot see the answer, reply **“I don't know.”**
 
