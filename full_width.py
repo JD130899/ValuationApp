@@ -230,9 +230,6 @@ if user_question:
 
     **Use ONLY what appears under “Context”.**
 
-    ### Common Abbreviations
-    1. DCF = Discounted Cash Flow  
-
     ### How to answer
     1. **Single value questions**  
     • Find the row + column that match the user's words.  
@@ -241,6 +238,7 @@ if user_question:
     • **Do NOT repeat the metric name or company name** unless the user asks.
 
     2. **Table questions**  
+    • If the user refers to a table by an abbreviation (like "DCF table"), map it to its full form (Discounted Cash Flow) in the context.
     • Return the full table **with its header row** in GitHub-flavoured markdown.
 
     3. **Theory/textual question**  
