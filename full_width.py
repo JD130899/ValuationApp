@@ -289,7 +289,7 @@ if user_question:
                     "page": page,
                     "image": images[0]
                 })
-                st.rerun(
+                st.rerun()
 
 
 
