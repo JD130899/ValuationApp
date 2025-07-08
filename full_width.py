@@ -111,6 +111,8 @@ if "initialized" not in st.session_state:
     st.session_state.messages.append({"role": "assistant", "content": "Hi! I am here to answer any questions you may have about your valuation report."})
     st.session_state.messages.append({"role": "assistant", "content": "What can I help you with?"})
 
+if "source_infos" not in st.session_state:
+    st.session_state.source_infos = []
 
 # Step 1: Parsing Pdf
 def parse_pdf():
@@ -206,10 +208,12 @@ for msg in st.session_state.messages:
         st.markdown(f"<div class='{role_class} clearfix'>{msg['content']}</div>", unsafe_allow_html=True)
 
 # --- Persistent Source Info display ---
-if "source_image" in st.session_state:
-    with st.popover("📘 Source Info"):
-        st.markdown(f"**Page: {st.session_state.source_page}**")
-        st.image(st.session_state.source_image, caption=f"Page {st.session_state.source_page}", use_container_width=True)
+if st.session_state.source_infos:
+    for idx, info in enumerate(st.session_state.source_infos):
+        with st.popover(f"📘 Source Info {idx+1}"):
+            st.markdown(f"**Page: {info['page']}**")
+            st.image(info["image"], caption=f"Page {info['page']}", use_container_width=True)
+
 
    
 
@@ -278,14 +282,14 @@ if user_question:
 
     if matched_doc:
         page = matched_doc.metadata.get("page_number", "Unknown")
-        with st.popover("📘 Source Info"):
-            st.markdown(f"**Page: {page}**")
-            with tempfile.TemporaryDirectory() as tmp:
-                images = convert_from_path(PDF_PATH, dpi=150, first_page=page, last_page=page, output_folder=tmp)
-                if images:
-                    st.image(images[0], caption=f"Page {page}", use_container_width=True)
-                    st.session_state.source_image = images[0]
-                    st.session_state.source_page = page
+        with tempfile.TemporaryDirectory() as tmp:
+            images = convert_from_path(PDF_PATH, dpi=150, first_page=page, last_page=page, output_folder=tmp)
+            if images:
+                st.session_state.source_infos.append({
+                    "page": page,
+                    "image": images[0]
+                })
+
 
 
     
