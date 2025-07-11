@@ -145,7 +145,7 @@ for key, pages in heading_pages.items():
 
         # Add next page after market approach
         if key == "market_approach":
-            total_pages = len(fitz.open(pdf_path))
+            total_pages = len(fitz.open(PDF_PATH))
             if selected_page + 1 < total_pages:
                 final_selections.append((selected_page + 1, f"{key}_continued"))
 
