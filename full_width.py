@@ -237,7 +237,7 @@ def parse_pdf():
         api_key="llx-GXPHf09BoCtf4RciC9CqmLMRvMAdMM1X6taKcwhWGKxVFP4S",
         num_workers=4
     )
-    result = parser.parse("/Users/jaipdalvi/Desktop/Work/Gen AI/Langchain/Galligan Holdings Certified Valuation Report.pdf")
+    result = parser.parse(PDF_PATH)
 
     pages = []
     for page in result.pages:
