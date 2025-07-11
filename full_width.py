@@ -22,6 +22,8 @@ from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import TextLoader
 import os
+import fitz
+
 # --- Streamlit UI Config ---
 st.set_page_config(page_title="Valuation RAG Chatbot", layout="wide")
 
@@ -152,9 +154,9 @@ if valuation_summary_page is not None:
     final_selections.append((valuation_summary_page, "valuation_summary"))
 
 # === Step 3: Convert to images
-all_images = convert_from_path(pdf_path, dpi=300)
+all_images = convert_from_path(PDF_PATH, dpi=300)
 
-openai.api_key = os.getenv("OPENAI_API_KEY")  # Set via env variable
+openai.api_key = os.getenv("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")  # Set via env variable
 for idx, label in final_selections:
     image = all_images[idx]
     image_path = os.path.join(image_folder, f"{label}_page_{idx+1}.png")
