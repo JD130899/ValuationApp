@@ -23,6 +23,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import TextLoader
 import os
 import fitz
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 # --- Streamlit UI Config ---
 st.set_page_config(page_title="Valuation RAG Chatbot", layout="wide")
