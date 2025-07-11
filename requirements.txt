@@ -17,3 +17,4 @@ llama-cloud-services
 pypdf
 cohere
 scikit-learn
+pymupdf
