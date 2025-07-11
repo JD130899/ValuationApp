@@ -156,16 +156,11 @@ if valuation_summary_page is not None:
 # === Step 3: Convert to images
 all_images = convert_from_path(PDF_PATH, dpi=300)
 
-openai.api_key = os.getenv("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")  # Set via env variable
+openai.api_key = st.secrets["OPENAI_API_KEY"] # Set via env variable
 for idx, label in final_selections:
     image = all_images[idx]
     image_path = os.path.join(image_folder, f"{label}_page_{idx+1}.png")
     image.save(image_path)
-
-
-# === OpenAI API Key ===
-openai.api_key = "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"
-
 
 
 # === Loop through each PNG file ===
@@ -234,7 +229,7 @@ if "source_infos" not in st.session_state:
 # Step 1: Parsing Pdf
 def parse_pdf():
     parser = LlamaParse(
-        api_key="llx-GXPHf09BoCtf4RciC9CqmLMRvMAdMM1X6taKcwhWGKxVFP4S",
+        api_key=st.secrets["LLAMA_CLOUD_API_KEY"],
         num_workers=4
     )
     result = parser.parse(PDF_PATH)
@@ -294,7 +289,7 @@ if not st.session_state.initialized:
             page = doc.metadata.get("page_number", "-")
 
     with st.spinner("Building vectorstore..."):
-        os.environ["COHERE_API_KEY"] = "qeNFbHVCZhyb1pmOhlcNYIAMItuV4xCOQwk4OSq0"
+        os.environ["COHERE_API_KEY"] =st.secrets["COHERE_API_KEY"]
         embedding = CohereEmbeddings(model="embed-english-v3.0", user_agent="langchain")
 
         # Step 3: Create FAISS vector store
