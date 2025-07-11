@@ -92,14 +92,129 @@ def typewriter_output(answer):
 st.title("Underwriting Agent")
 
 
-# --- PDF Upload Logic ---
+# === Upload PDF ===
 uploaded_pdf = st.file_uploader("Upload a Valuation PDF", type=["pdf"])
-if uploaded_pdf is not None:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        tmp_file.write(uploaded_pdf.read())
-        PDF_PATH = tmp_file.name
-else:
+if uploaded_pdf is None:
     st.stop()
+
+# Save uploaded PDF to a temp path
+with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+    tmp_file.write(uploaded_pdf.read())
+    PDF_PATH = tmp_file.name
+
+# Setup temp output folder
+output_folder = tempfile.mkdtemp()
+image_folder = output_folder
+extracted_folder = output_folder  # used in parse_pdf()
+
+
+# === Target Setup ===
+target_headings = {
+    "income_approach": {"text": "INCOME APPROACH", "take": 1},
+    "market_approach": {"text": "MARKET APPROACH", "take": 2},
+}
+
+valuation_summary_text = "VALUATION SUMMARY"
+valuation_summary_page = None
+
+# === Step 1: Extract heading-based matches (skip early pages)
+doc = fitz.open(PDF_PATH)
+heading_pages = {key: [] for key in target_headings}
+for i in range(len(doc)):
+    if i < 5:
+        continue
+    text = doc[i].get_text().upper()
+    for key, config in target_headings.items():
+        if config["text"] in text:
+            heading_pages[key].append(i)
+    if valuation_summary_page is None and valuation_summary_text in text:
+        valuation_summary_page = i
+doc.close()
+
+
+# === Step 2: Select exact pages
+final_selections = []
+
+for key, pages in heading_pages.items():
+    take_index = target_headings[key]["take"] - 1
+    if take_index < len(pages):
+        selected_page = pages[take_index]
+        final_selections.append((selected_page, key))
+
+        # Add next page after market approach
+        if key == "market_approach":
+            total_pages = len(fitz.open(pdf_path))
+            if selected_page + 1 < total_pages:
+                final_selections.append((selected_page + 1, f"{key}_continued"))
+
+# Add valuation summary if found
+if valuation_summary_page is not None:
+    final_selections.append((valuation_summary_page, "valuation_summary"))
+
+# === Step 3: Convert to images
+all_images = convert_from_path(pdf_path, dpi=300)
+
+openai.api_key = os.getenv("OPENAI_API_KEY")  # Set via env variable
+for idx, label in final_selections:
+    image = all_images[idx]
+    image_path = os.path.join(image_folder, f"{label}_page_{idx+1}.png")
+    image.save(image_path)
+
+
+# === OpenAI API Key ===
+openai.api_key = "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"
+
+
+
+# === Loop through each PNG file ===
+for filename in sorted(os.listdir(output_folder)):
+    if filename.endswith(".png"):
+        image_path = os.path.join(output_folder, filename)
+        print(f"\n🖼️ Processing: {filename}")
+
+        # Extract page number from filename
+        match = re.search(r'page_(\d+)', filename)
+        if not match:
+            print("❌ Could not extract page number. Skipping.")
+            continue
+        page_num = match.group(1)
+
+        # Read and encode image
+        with open(image_path, "rb") as image_file:
+            image_bytes = image_file.read()
+            base64_image = base64.b64encode(image_bytes).decode("utf-8")
+
+        # Send to GPT-4o
+        response = openai.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": """
+Can you extract all values and details precisely from the image? Return the response in a clean and readable format.
+
+If formulas are present, write "THE EQUATION" using simple math symbols like x, -, and = (instead of technical or LaTeX format). Clean any unnecessary text or symbols.
+
+Make sure the final output is easy to read and organized properly.
+""" },
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
+                    ],
+                },
+            ],
+            max_tokens=512,
+        )
+
+        # === Save Response to Text File ===
+        output_text = response.choices[0].message.content
+        output_path = os.path.join(output_folder, f"page_{page_num}.txt")
+
+        with open(output_path, "w") as f:
+            f.write(output_text)
+
+        print(f"✅ Saved: page_{page_num}.txt")
+
+
 
 # --- Session State ---
 if "initialized" not in st.session_state:
@@ -116,31 +231,40 @@ if "source_infos" not in st.session_state:
 
 # Step 1: Parsing Pdf
 def parse_pdf():
-    parser = LlamaParse(api_key="llx-GXPHf09BoCtf4RciC9CqmLMRvMAdMM1X6taKcwhWGKxVFP4S", num_workers=4)
-    result = parser.parse(PDF_PATH)
-    
+    parser = LlamaParse(
+        api_key="llx-GXPHf09BoCtf4RciC9CqmLMRvMAdMM1X6taKcwhWGKxVFP4S",
+        num_workers=4
+    )
+    result = parser.parse("/Users/jaipdalvi/Desktop/Work/Gen AI/Langchain/Galligan Holdings Certified Valuation Report.pdf")
+
     pages = []
     for page in result.pages:
-        content = page.md.strip()
-        
-        # Clean unwanted "null" and empty lines
-        cleaned_lines = [
-            line for line in content.splitlines()
-            if line.strip().lower() != "null" and line.strip() != ""
-        ]
-        
-        cleaned_content = "\n".join(cleaned_lines)
+        page_num = page.page  # LlamaParse uses 1-based indexing
 
-        # Hard coding   
-        if "| Score | China Exposure" in cleaned_content and "Vulnerability" not in cleaned_content:
-            cleaned_content = cleaned_content.replace("| Score |", "| Vulnerability Score |")
-        
-        if cleaned_content:
-            pages.append(Document(page_content=cleaned_content, metadata={"page_number": page.page}))
-    
+        # === Check if there's a replacement file ===
+        replacement_path = os.path.join(extracted_folder, f"page_{page_num}.txt")
+        if os.path.exists(replacement_path):
+            with open(replacement_path, "r") as f:
+                content = f.read().strip()
+        else:
+            # Original logic: clean parsed Markdown
+            content = page.md.strip()
+
+            # Clean unwanted "null" and empty lines
+            cleaned_lines = [
+                line for line in content.splitlines()
+                if line.strip().lower() != "null" and line.strip() != ""
+            ]
+            content = "\n".join(cleaned_lines)
+
+            # Hardcoded fix for table header if needed
+            if "| Score | China Exposure" in content and "Vulnerability" not in content:
+                content = content.replace("| Score |", "| Vulnerability Score |")
+
+        if content:
+            pages.append(Document(page_content=content, metadata={"page_number": page_num}))
+
     return pages
-
-
 
 
 
@@ -160,7 +284,7 @@ if not st.session_state.initialized:
         docs = parse_pdf()
 
     with st.spinner("Chunking content..."):
-        splitter = RecursiveCharacterTextSplitter(chunk_size=3000,chunk_overlap=0,separators=["\n"])
+        splitter = RecursiveCharacterTextSplitter(chunk_size=3300,chunk_overlap=0,separators=["\n"])
         split_docs = splitter.split_documents(docs)
     
         for idx, doc in enumerate(split_docs, start=1):
@@ -232,31 +356,41 @@ if user_question:
     template = """
     You are a financial-data extraction assistant.
 
-    **Use ONLY what appears under “Context”.**
+**Use ONLY what appears under “Context”.**
 
-    ### How to answer
-    1. **Single value questions**  
-    • Find the row + column that match the user's words.  
-    • Return the answer in a **short, clear sentence** using the exact number from the context.  
-        Example: “The Income (DCF) approach value is $1,150,000.”  
-    • **Do NOT repeat the metric name or company name** unless the user asks.
+### How to answer
+1. **Single value questions**  
+   • Find the row + column that match the user's words.  
+   • Return the answer in a **short, clear sentence** using the exact number from the context.  
+     Example: “The Income (DCF) approach value is $1,150,000.”  
+   • **Do NOT repeat the metric name or company name** unless the user asks.
 
-    2. **Table questions**  
-    • Return the full table **with its header row** in GitHub-flavoured markdown.
+2. **Table questions**  
+   • Return the full table **with its header row** in GitHub-flavoured markdown.
 
-    3. **Theory/textual question**  
-    • Try to return an explanation **based on the context**.
+3. **Valuation method / theory / reasoning questions**
+   • If the question involves **valuation methods**, **concluded value**, or topics like **Income Approach**, **Market Approach**, or **Valuation Summary**, do the following:
+     - Combine and synthesize relevant information across all chunks.
+     - Pay special attention to how **weights are distributed** (e.g., “50% DCF, 25% EBITDA, 25% SDE”).
+     - Avoid oversimplifying if more detailed breakdowns (like subcomponents of market approach) are available.
+     - If a table gives a simplified view (e.g., "50% Market Approach"), but other parts break it down (e.g., 25% EBITDA + 25% SDE), **prefer the detailed breakdown with percent value**.   
+     - When describing weights, also mention the **corresponding dollar values** used in the context (e.g., “50% DCF = $3,712,000, 25% EBITDA = $4,087,000...”)
+     - **If Market approach is composed of sub-methods like EBITDA and SDE, then explicitly extract and show their individual weights and values, even if not listed together in a single table.**
 
 
-    If you still cannot see the answer, reply **“I don't know.”**
+4. **Theory/textual question**  
+   • Try to return an explanation **based on the context**.
 
-    ---
-    Context:
-    {context}
+   
+If you still cannot see the answer, reply **“I don't know.”**
 
-    ---
-    Question: {question}
-    Answer:""",
+---
+Context:
+{context}
+
+---
+Question: {question}
+Answer:""",
         input_variables=["context", "question"]
     )
 
