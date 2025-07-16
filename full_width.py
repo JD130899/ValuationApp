@@ -6,6 +6,8 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 import time
+import openai
+
 import numpy as np
 import os
 from pdf2image import convert_from_path
