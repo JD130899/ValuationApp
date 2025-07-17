@@ -56,12 +56,6 @@ def pil_to_base64(img: Image.Image) -> str:
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 # Once, at startup, stash every page’s PIL.Image in session_state
-if "page_images" not in st.session_state:
-    all_images = convert_from_path(PDF_PATH, dpi=300)
-    st.session_state.page_images = {
-        i+1: img
-        for i, img in enumerate(all_images)
-    }
 
 
 # === Streamlit UI Config ===
