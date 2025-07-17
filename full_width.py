@@ -28,6 +28,26 @@ import tempfile
 
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
+st.set_page_config(page_title="Valuation RAG Chatbot", layout="wide")
+st.title("Underwriting Agent")
+
+# 1) Let the user upload their PDF
+uploaded_pdf = st.file_uploader(
+    "🗂️ Upload your Valuation Report (PDF)",
+    type=["pdf"]
+)
+if not uploaded_pdf:
+    st.stop()  # wait here until they upload
+
+# 2) Write it out to a temporary file
+tmpdir = tempfile.mkdtemp()
+PDF_PATH = os.path.join(tmpdir, uploaded_pdf.name)
+with open(PDF_PATH, "wb") as f:
+    f.write(uploaded_pdf.getbuffer())
+
+# 3) Create an 'extracted' subfolder for images/text
+EXTRACTED_FOLDER = os.path.join(tmpdir, "extracted")
+os.makedirs(EXTRACTED_FOLDER, exist_ok=True)
 
 # HELPER: turn PIL→base64
 def pil_to_base64(img: Image.Image) -> str:
@@ -45,26 +65,7 @@ if "page_images" not in st.session_state:
 
 
 # === Streamlit UI Config ===
-st.set_page_config(page_title="Valuation RAG Chatbot", layout="wide")
-st.title("Underwriting Agent")
 
-# 1) Let the user upload their PDF
-uploaded_pdf = st.file_uploader(
-    "🗂️ Upload your Valuation Report (PDF)", 
-    type=["pdf"]
-)
-if not uploaded_pdf:
-    st.stop()  # nothing else runs until they upload
-
-# 2) Write it out to a temporary file
-tmpdir = tempfile.mkdtemp()
-PDF_PATH = os.path.join(tmpdir, uploaded_pdf.name)
-with open(PDF_PATH, "wb") as f:
-    f.write(uploaded_pdf.getbuffer())
-
-# 3) Create an 'extracted' subfolder for images/text
-EXTRACTED_FOLDER = os.path.join(tmpdir, "extracted")
-os.makedirs(EXTRACTED_FOLDER, exist_ok=True)
 
 # === CSS Styling for chat bubbles ===
 st.markdown("""
